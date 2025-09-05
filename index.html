@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Workout Builder + History</title>
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Chart.js for progress graphs -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js" defer></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <h1>Workout Builder</h1>
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <button class="tab active" data-target="#setup" role="tab" aria-selected="true">1) Setup</button>
+      <button class="tab" data-target="#builder" role="tab" aria-selected="false">2) Builder</button>
+      <button class="tab" data-target="#history" role="tab" aria-selected="false">3) History</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- STEP 1: SESSION SETUP -->
+    <section id="setup" class="view active" aria-labelledby="Setup your session">
+      <form id="setupForm" class="card">
+        <h2>Session Setup</h2>
+
+        <!-- Where (dropdown) -->
+        <div class="field">
+          <label for="location">Where are you training?</label>
+          <select id="location" required>
+            <option value="" disabled selected>Select location</option>
+            <option>Home</option>
+            <option>Gym</option>
+            <option>Outdoor</option>
+          </select>
+        </div>
+
+        <!-- When (radio 1-of-2) -->
+        <fieldset class="field">
+          <legend>When are you recording this?</legend>
+          <div class="radio-row">
+            <label class="radio">
+              <input type="radio" name="when" value="now" checked />
+              <span>Now</span>
+            </label>
+            <label class="radio">
+              <input type="radio" name="when" value="date" />
+              <span>Set a date</span>
+            </label>
+          </div>
+          <div class="date-row">
+            <label for="sessionDate">Pick date</label>
+            <input type="date" id="sessionDate" disabled />
+          </div>
+        </fieldset>
+
+        <!-- Focus (checkboxes) -->
+        <fieldset class="field">
+          <legend>What are you focusing on? (choose any)</legend>
+          <div class="check-grid" id="focusGroup">
+            <label><input type="checkbox" value="push" /> Push</label>
+            <label><input type="checkbox" value="pull" /> Pull</label>
+            <label><input type="checkbox" value="hinge" /> Hinge</label>
+            <label><input type="checkbox" value="squat" /> Squat</label>
+            <label><input type="checkbox" value="core" /> Core</label>
+            <label><input type="checkbox" value="upper" /> Upper</label>
+            <label><input type="checkbox" value="lower" /> Lower</label>
+            <label><input type="checkbox" value="full body" /> Full body</label>
+            <label class="specific">
+              <input type="checkbox" value="specific muscle" id="specificFocusChk" />
+              Specific muscle
+              <input type="text" id="specificFocusTxt" placeholder="e.g. biceps" disabled />
+            </label>
+          </div>
+        </fieldset>
+
+        <!-- Equipment (checkboxes) -->
+        <fieldset class="field">
+          <legend>Equipment you have (choose any)</legend>
+          <div class="check-grid" id="equipGroup">
+            <label><input type="checkbox" value="Bodyweight" /> Bodyweight</label>
+            <label><input type="checkbox" value="Dumbbells" /> Dumbbells</label>
+            <label><input type="checkbox" value="Barbell" /> Barbell</label>
+            <label><input type="checkbox" value="Kettlebell" /> Kettlebell</label>
+            <label><input type="checkbox" value="Bands" /> Bands</label>
+            <label><input type="checkbox" value="Machines" /> Machines</label>
+            <label class="specific">
+              <input type="checkbox" value="Other" id="otherEquipChk" />
+              Other
+              <input type="text" id="otherEquipTxt" placeholder="comma-separated" disabled />
+            </label>
+          </div>
+        </fieldset>
+
+        <div class="actions">
+          <button type="submit" class="btn primary">Next → Builder</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- STEP 2: WORKOUT BUILDER -->
+    <section id="builder" class="view" aria-labelledby="Workout table builder">
+      <div class="card">
+        <header class="subheader">
+          <div>
+            <h2>Build Your Workout</h2>
+            <p id="sessionSummary" class="muted"></p>
+          </div>
+          <div class="builder-actions">
+            <button id="backToSetup" class="btn">← Back</button>
+            <button id="addExercise" class="btn">+ Add Exercise</button>
+          </div>
+        </header>
+
+        <div class="table-wrap">
+          <table id="workoutTable">
+            <thead>
+              <tr>
+                <th style="min-width:210px;">Exercise</th>
+                <th style="width:80px;">Sets</th>
+                <th>Reps &amp; Weight (auto-adds per set)</th>
+                <th style="min-width:160px;">Notes</th>
+                <th style="width:70px;">Remove</th>
+              </tr>
+            </thead>
+            <tbody id="workoutBody">
+              <!-- Rows injected here -->
+            </tbody>
+          </table>
+        </div>
+
+        <datalist id="exerciseSuggestions">
+          <!-- Filled based on focus + equipment -->
+        </datalist>
+
+        <footer class="builder-footer">
+          <div class="totals">
+            <span>Total Sets: <strong id="totalSets">0</strong></span>
+            <span>Total Reps: <strong id="totalReps">0</strong></span>
+            <span>Total Volume: <strong id="totalVolume">0</strong></span>
+          </div>
+          <div class="builder-actions">
+            <button id="computeTotals" class="btn">Update Totals</button>
+            <button id="finishSave" class="btn primary">Finish &amp; Save</button>
+          </div>
+        </footer>
+      </div>
+    </section>
+
+    <!-- STEP 3: HISTORY / PROGRESS -->
+    <section id="history" class="view" aria-labelledby="Workout history and progress">
+      <div class="card">
+        <h2>History &amp; Progress</h2>
+
+        <div class="filters">
+          <label>
+            Exercise:
+            <select id="historyExercise">
+              <option value="__ALL__">All exercises (total volume)</option>
+            </select>
+          </label>
+          <label>
+            Metric:
+            <select id="historyMetric">
+              <option value="volume">Total volume</option>
+              <option value="best">Best single-set weight</option>
+            </select>
+          </label>
+          <div class="spacer"></div>
+          <button id="clearHistory" class="btn danger">Clear History</button>
+        </div>
+
+        <div class="chart-wrap">
+          <canvas id="progressChart" height="120"></canvas>
+        </div>
+
+        <div class="table-wrap">
+          <table id="historyTable">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Location</th>
+                <th>Exercise</th>
+                <th>Sets</th>
+                <th>Reps</th>
+                <th>Volume</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Filled by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- SUMMARY DIALOG -->
+  <dialog id="summaryDialog">
+    <form method="dialog" class="summary">
+      <h3>Workout Summary</h3>
+      <p class="muted" id="summaryMeta"></p>
+
+      <div class="table-wrap">
+        <table id="summaryTable">
+          <thead>
+            <tr>
+              <th>Exercise</th>
+              <th>Sets</th>
+              <th>Total Reps</th>
+              <th>Total Volume</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+          <tfoot>
+            <tr>
+              <th>Overall</th>
+              <th id="sumSets">0</th>
+              <th id="sumReps">0</th>
+              <th id="sumVolume">0</th>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <menu>
+        <button value="cancel" class="btn">Close</button>
+        <button value="default" class="btn primary">OK</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <footer class="app-footer">
+    <small>Tip: totals = sum(weight × reps). Data is saved locally in your browser.</small>
+  </footer>
+</body>
+                     </html>

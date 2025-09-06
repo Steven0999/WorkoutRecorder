@@ -11,7 +11,13 @@
 </head>
 <body>
   <header class="app-header">
-    <h1>Workout Builder</h1>
+    <div class="header-row">
+      <h1>Workout Builder</h1>
+      <div class="quick-actions">
+        <button class="btn" data-jump="#history" title="Open history from anywhere">📈 History</button>
+      </div>
+    </div>
+
     <nav class="tabs" role="tablist" aria-label="Sections">
       <button class="tab active" data-target="#setup" role="tab" aria-selected="true">1) Setup</button>
       <button class="tab" data-target="#builder" role="tab" aria-selected="false">2) Builder</button>
@@ -94,7 +100,9 @@
         </fieldset>
 
         <div class="actions">
-          <button type="submit" class="btn primary">Next → Builder</button>
+          <button type="button" class="btn" id="gotoHistoryFromSetup">📈 View History</button>
+          <div class="spacer"></div>
+          <button type="submit" class="btn primary" id="nextToBuilder">Next → Builder</button>
         </div>
       </form>
     </section>
@@ -108,8 +116,9 @@
             <p id="sessionSummary" class="muted"></p>
           </div>
           <div class="builder-actions">
-            <button id="backToSetup" class="btn">← Back</button>
+            <button id="backToSetup" class="btn">← Setup</button>
             <button id="addExercise" class="btn">+ Add Exercise</button>
+            <button class="btn" data-jump="#history">📈 History</button>
           </div>
         </header>
 
@@ -124,15 +133,11 @@
                 <th style="width:70px;">Remove</th>
               </tr>
             </thead>
-            <tbody id="workoutBody">
-              <!-- Rows injected here -->
-            </tbody>
+            <tbody id="workoutBody"></tbody>
           </table>
         </div>
 
-        <datalist id="exerciseSuggestions">
-          <!-- Filled based on focus + equipment -->
-        </datalist>
+        <datalist id="exerciseSuggestions"></datalist>
 
         <footer class="builder-footer">
           <div class="totals">
@@ -151,7 +156,13 @@
     <!-- STEP 3: HISTORY / PROGRESS -->
     <section id="history" class="view" aria-labelledby="Workout history and progress">
       <div class="card">
-        <h2>History &amp; Progress</h2>
+        <header class="subheader">
+          <h2>History &amp; Progress</h2>
+          <div class="builder-actions">
+            <button class="btn" data-jump="#setup">← Setup</button>
+            <button class="btn" data-jump="#builder">→ Builder</button>
+          </div>
+        </header>
 
         <div class="filters">
           <label>
@@ -187,9 +198,7 @@
                 <th>Volume</th>
               </tr>
             </thead>
-            <tbody>
-              <!-- Filled by JS -->
-            </tbody>
+            <tbody></tbody>
           </table>
         </div>
       </div>
@@ -235,4 +244,4 @@
     <small>Tip: totals = sum(weight × reps). Data is saved locally in your browser.</small>
   </footer>
 </body>
-                     </html>
+                </html>

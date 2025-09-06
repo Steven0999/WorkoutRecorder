@@ -1,7 +1,8 @@
-/* Workout Builder + History
- * - Step 1: collect session setup
- * - Step 2: build workout (table). Sets -> auto create reps/weight inputs per set
- * - Step 3: history & charts (Chart.js). Data stored in localStorage.
+/* Workout Builder + History (Connected Steps)
+ * - Step 1: Setup -> "Next" jumps to Step 2
+ * - You can open History anytime via tabs or quick buttons
+ * - Builder auto-generates reps/weight inputs per set
+ * - History chart + table; localStorage persistence
  */
 (() => {
   const $ = (s, el = document) => el.querySelector(s);
@@ -9,7 +10,6 @@
   const STORAGE_KEY = "wb_history_v1";
 
   // ---- EXERCISE LIBRARY (focus tags + equipment tags) ----
-  // Keep it compact but useful. You can add more easily.
   const EXERCISE_LIBRARY = [
     // Push
     { n: "Barbell Bench Press", f: ["push","upper"], e: ["Barbell","Machines"] },
@@ -61,13 +61,17 @@
   ];
 
   // ---- STATE ----
-  let sessionConfig = null;  // filled after setup
+  let sessionConfig = null;  // set after setup
   let chart = null;
 
   // ---- ELEMENTS ----
   const tabs = $$(".tab");
   const views = $$(".view");
   const setupForm = $("#setupForm");
+  const nextToBuilderBtn = $("#nextToBuilder");
+  const gotoHistoryFromSetup = $("#gotoHistoryFromSetup");
+  const quickHistoryBtn = $('.quick-actions .btn[data-jump="#history"]');
+
   const whenRadios = $$('input[name="when"]', setupForm);
   const sessionDate = $("#sessionDate");
   const specificFocusChk = $("#specificFocusChk");
@@ -75,7 +79,6 @@
   const otherEquipChk = $("#otherEquipChk");
   const otherEquipTxt = $("#otherEquipTxt");
 
-  const builderView = $("#builder");
   const sessionSummary = $("#sessionSummary");
   const addExerciseBtn = $("#addExercise");
   const backToSetupBtn = $("#backToSetup");
@@ -94,7 +97,6 @@
   const sumReps = $("#sumReps");
   const sumVolume = $("#sumVolume");
 
-  const historyView = $("#history");
   const historyExerciseSel = $("#historyExercise");
   const historyMetricSel = $("#historyMetric");
   const historyTableBody = $("#historyTable tbody");
@@ -103,26 +105,43 @@
 
   // ---- INIT ----
   initTabs();
+  initJumpButtons();
   initSetup();
   initBuilder();
   initHistory();
-  renderHistoryUI(); // populate initial chart (if any)
+  renderHistoryUI(); // populate chart/table if there’s saved data
 
   // ---- Tabs / Views ----
   function initTabs() {
     tabs.forEach(btn => {
       btn.addEventListener("click", () => {
-        tabs.forEach(b => b.classList.remove("active"));
-        btn.classList.add("active");
-        const target = btn.dataset.target;
-        views.forEach(v => v.classList.toggle("active", `#${v.id}` === target));
+        selectTab(btn.dataset.target);
       });
     });
   }
 
+  function initJumpButtons() {
+    // Any button with data-jump can switch instantly
+    $$("[data-jump]").forEach(btn => {
+      btn.addEventListener("click", () => selectTab(btn.dataset.jump));
+    });
+    gotoHistoryFromSetup.addEventListener("click", () => selectTab("#history"));
+    quickHistoryBtn.addEventListener("click", () => selectTab("#history"));
+  }
+
+  function selectTab(id) {
+    tabs.forEach(b => {
+      const isActive = b.dataset.target === id;
+      b.classList.toggle("active", isActive);
+      b.setAttribute("aria-selected", isActive ? "true" : "false");
+    });
+    views.forEach(v => v.classList.toggle("active", `#${v.id}` === id));
+    // Keep chart responsive when switching in
+    if (id === "#history") setTimeout(() => { if (chart) chart.resize(); }, 50);
+  }
+
   // ---- Setup step ----
   function initSetup() {
-    // when: now vs date
     whenRadios.forEach(r => r.addEventListener("change", () => {
       sessionDate.disabled = (getSelectedWhen() !== "date");
       if (!sessionDate.disabled && !sessionDate.value) {
@@ -142,43 +161,47 @@
 
     setupForm.addEventListener("submit", (e) => {
       e.preventDefault();
-      // collect config
-      const location = $("#location").value;
-      if (!location) { alert("Please select where you're training."); return; }
-
-      const when = getSelectedWhen();
-      const dateISO = (when === "now")
-        ? new Date().toISOString()
-        : (sessionDate.value ? new Date(sessionDate.value).toISOString() : new Date().toISOString());
-
-      const focus = $$("#focusGroup input[type=checkbox]:checked")
-        .map(cb => cb.value);
-      let specific = specificFocusTxt.value.trim();
-      if (specific && !focus.includes("specific muscle")) focus.push("specific muscle");
-
-      const equip = $$("#equipGroup input[type=checkbox]:checked")
-        .map(cb => cb.value);
-      const otherTxt = otherEquipTxt.value.split(",").map(s => s.trim()).filter(Boolean);
-      const equipment = Array.from(new Set(equip.concat(otherTxt)));
-
-      sessionConfig = { location, dateISO, focus, specific, equipment };
-
-      // suggestions based on chosen focus/equipment
-      fillExerciseSuggestions(sessionConfig);
-
-      // update summary line
-      sessionSummary.innerHTML = [
-        `Date: <code>${formatDateShort(new Date(sessionConfig.dateISO))}</code>`,
-        `Where: <code>${sessionConfig.location}</code>`,
-        `Focus: <code>${(sessionConfig.focus.join(", ") || "n/a")}${sessionConfig.specific ? ` (${sessionConfig.specific})` : ""}</code>`,
-        `Equipment: <code>${sessionConfig.equipment.join(", ") || "n/a"}</code>`
-      ].join(" • ");
-
-      // go to builder tab
-      selectTab("#builder");
-      // if no rows yet, add the first one
-      if (!workoutBody.children.length) addExerciseRow();
+      proceedToBuilderFromSetup();
     });
+
+    // Also allow the "Next → Builder" button to validate and jump
+    nextToBuilderBtn.addEventListener("click", (e) => {
+      // let submit handler do the validation; no-op
+    });
+  }
+
+  function proceedToBuilderFromSetup() {
+    const location = $("#location").value;
+    if (!location) { alert("Please select where you're training."); return; }
+
+    const when = getSelectedWhen();
+    const dateISO = (when === "now")
+      ? new Date().toISOString()
+      : (sessionDate.value ? new Date(sessionDate.value).toISOString() : new Date().toISOString());
+
+    const focus = $$("#focusGroup input[type=checkbox]:checked")
+      .map(cb => cb.value);
+    const specific = specificFocusTxt.value.trim();
+    if (specific && !focus.includes("specific muscle")) focus.push("specific muscle");
+
+    const equip = $$("#equipGroup input[type=checkbox]:checked")
+      .map(cb => cb.value);
+    const otherTxt = otherEquipTxt.value.split(",").map(s => s.trim()).filter(Boolean);
+    const equipment = Array.from(new Set(equip.concat(otherTxt)));
+
+    sessionConfig = { location, dateISO, focus, specific, equipment };
+
+    fillExerciseSuggestions(sessionConfig);
+
+    sessionSummary.innerHTML = [
+      `Date: <code>${formatDateShort(new Date(sessionConfig.dateISO))}</code>`,
+      `Where: <code>${sessionConfig.location}</code>`,
+      `Focus: <code>${(sessionConfig.focus.join(", ") || "n/a")}${sessionConfig.specific ? ` (${sessionConfig.specific})` : ""}</code>`,
+      `Equipment: <code>${sessionConfig.equipment.join(", ") || "n/a"}</code>`
+    ].join(" • ");
+
+    selectTab("#builder");
+    if (!workoutBody.children.length) addExerciseRow(); // start with one row
   }
 
   function getSelectedWhen() {
@@ -198,7 +221,6 @@
       return matchesFocus && matchesEquip;
     });
 
-    // always include everything as fallback duplicates are okay (datalist shows all)
     const names = Array.from(new Set(list.map(x => x.n).concat(EXERCISE_LIBRARY.map(x => x.n))));
     names.sort((a,b) => a.localeCompare(b));
     names.forEach(name => {
@@ -239,10 +261,8 @@
     const pairsWrap = $(".sets-pairs", tr);
     const removeBtn = $(".remove-row", tr);
 
-    // render initial pairs
     renderSetPairs(pairsWrap, +setsInput.value, initial?.sets || []);
 
-    // adjust on change
     setsInput.addEventListener("input", () => {
       const val = clamp(parseInt(setsInput.value || "0", 10), 1, 20);
       setsInput.value = val;
@@ -251,7 +271,6 @@
 
     pairsWrap.addEventListener("input", () => debounceComputeTotals());
     $(".ex-name", tr).addEventListener("input", () => debounceComputeTotals());
-    $(".ex-notes", tr).addEventListener("input", () => { /* nothing */ });
 
     removeBtn.addEventListener("click", () => {
       tr.remove();
@@ -308,7 +327,7 @@
     const entries = [];
     $$("#workoutBody tr").forEach(tr => {
       const name = $(".ex-name", tr).value.trim();
-      if (!name) return; // skip empty
+      if (!name) return;
       const notes = $(".ex-notes", tr).value.trim();
       const sets = $$(".pair", tr).map(p => ({
         reps: +$(".reps", p).value || 0,
@@ -325,7 +344,6 @@
       alert("Add at least one exercise with some sets.");
       return;
     }
-    // compute totals + per-exercise summary
     const per = entries.map(e => {
       const reps = e.sets.reduce((a, s) => a + (s.reps || 0), 0);
       const volume = e.sets.reduce((a, s) => a + (s.reps * s.weight || 0), 0);
@@ -337,7 +355,6 @@
       volume: round1(per.reduce((a, x) => a + x.volume, 0))
     };
 
-    // Save to history
     const record = {
       id: cryptoRandomId(),
       dateISO: sessionConfig?.dateISO || new Date().toISOString(),
@@ -352,17 +369,15 @@
     history.push(record);
     saveHistory(history);
 
-    // Update UI: history + chart + dropdowns
     renderHistoryUI();
 
-    // Show summary dialog
     populateSummaryDialog(record, per);
     if (typeof summaryDialog.showModal === "function") {
       summaryDialog.showModal();
     } else {
-      alert("Workout saved! (Your browser doesn't support <dialog>.)");
+      alert("Workout saved!");
     }
-    computeTotals(); // refresh footer totals
+    computeTotals();
   }
 
   function populateSummaryDialog(record, per) {
@@ -395,11 +410,10 @@
   }
 
   function renderHistoryUI() {
-    // Populate exercise dropdown from history
     const history = loadHistory();
     const allExercises = new Set();
     history.forEach(r => r.entries.forEach(e => allExercises.add(e.name)));
-    // reset select (keep __ALL__)
+
     const prev = historyExerciseSel.value;
     historyExerciseSel.innerHTML = `<option value="__ALL__">All exercises (total volume)</option>`;
     Array.from(allExercises).sort((a,b)=>a.localeCompare(b)).forEach(name => {
@@ -407,7 +421,6 @@
       opt.value = name; opt.textContent = name;
       historyExerciseSel.appendChild(opt);
     });
-    // restore selection if possible
     const canRestore = Array.from(historyExerciseSel.options).some(o => o.value === prev);
     historyExerciseSel.value = canRestore ? prev : "__ALL__";
 
@@ -417,9 +430,8 @@
   function renderChartAndTable() {
     const history = loadHistory();
     const selExercise = historyExerciseSel.value;
-    const metric = historyMetricSel.value; // "volume" | "best"
+    const metric = historyMetricSel.value;
 
-    // Build timeline
     const labels = [];
     const values = [];
     const tableRows = [];
@@ -427,7 +439,6 @@
     history.sort((a,b)=> new Date(a.dateISO) - new Date(b.dateISO));
 
     if (selExercise === "__ALL__") {
-      // per session total volume
       history.forEach(rec => {
         labels.push(formatDateShort(new Date(rec.dateISO)));
         values.push(rec.totals.volume || 0);
@@ -441,7 +452,6 @@
         });
       });
     } else {
-      // per session for selected exercise
       history.forEach(rec => {
         const entry = rec.entries.find(e => e.name === selExercise);
         if (!entry) return;
@@ -461,10 +471,8 @@
       });
     }
 
-    // Draw chart
     drawChart(labels, values, selExercise, metric);
 
-    // Fill table
     historyTableBody.innerHTML = "";
     tableRows.reverse().forEach(row => {
       const tr = document.createElement("tr");
@@ -522,13 +530,7 @@
   }
 
   // ---- Utils + storage ----
-  function selectTab(id) {
-    tabs.forEach(b => b.classList.toggle("active", b.dataset.target === id));
-    views.forEach(v => v.classList.toggle("active", `#${v.id}` === id));
-  }
-
   function formatDateShort(d) {
-    // Europe/London vibe; simple dd Mon
     const opts = { day: "2-digit", month: "short", year: "numeric" };
     return d.toLocaleDateString(undefined, opts);
   }
@@ -542,7 +544,7 @@
   function cryptoRandomId() {
     if (window.crypto?.randomUUID) return crypto.randomUUID();
     return 'id-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
-    }
+  }
 
   function loadHistory() {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); }
